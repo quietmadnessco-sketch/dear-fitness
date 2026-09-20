@@ -1,3 +1,4 @@
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import Card, { StatCard } from '../components/Card'
 import { daysAgo } from '../lib/storage'
 
@@ -37,6 +38,12 @@ function Heatmap({ workoutDates, skipDates, weeks = 8 }) {
       </div>
     </div>
   )
+}
+
+function weekLabel(weeksAgo) {
+  const d = new Date()
+  d.setDate(d.getDate() - weeksAgo * 7)
+  return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
 }
 
 export default function Analytics({ store }) {
@@ -86,6 +93,22 @@ export default function Analytics({ store }) {
       return { date: l.date, name: ex ? ex.name : 'Deleted exercise', sets: l.sets, volume }
     })
 
+  // weekly volume — last 8 weeks, oldest to newest
+  const weeklyVolume = []
+  for (let w = 7; w >= 0; w--) {
+    const start = w * 7, end = start + 6
+    const vol = state.workoutLogs
+      .filter((l) => daysAgo(l.date) >= start && daysAgo(l.date) <= end)
+      .reduce((s, l) => s + l.sets.reduce((a, x) => a + x.weight * x.reps, 0), 0)
+    weeklyVolume.push({ week: weekLabel(w), volume: vol })
+  }
+
+  // skip log summary — surfaced directly here, not just on the Skip log tab
+  const skipCounts = state.skipLogs.reduce((a, s) => { a[s.reason] = (a[s.reason] || 0) + 1; return a }, {})
+  const skipReasonRows = Object.entries(skipCounts).sort((a, b) => b[1] - a[1])
+  const thisMonthSkips = state.skipLogs.filter((s) => daysAgo(s.date) <= 30).length
+  const recentSkips = [...state.skipLogs].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5)
+
   return (
     <div className="p-8 space-y-4">
       <div className="grid grid-cols-4 gap-4">
@@ -117,6 +140,59 @@ export default function Analytics({ store }) {
           )}
         </div>
         <div className="mt-3.5"><Heatmap workoutDates={workoutDates} skipDates={skipDates} /></div>
+      </Card>
+
+      <Card>
+        <p className="text-xs uppercase tracking-wide text-slate mb-3">Weekly volume (last 8 weeks)</p>
+        <div className="h-40">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={weeklyVolume} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <XAxis dataKey="week" tick={{ fill: '#8890A0', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#8890A0', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ background: '#1B2431', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${v.toLocaleString()}kg`, 'volume']} />
+              <Bar dataKey="volume" fill="#FF6A3D" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* Skip log summary — directly visible here, not only on the Skip log tab */}
+      <Card>
+        <p className="text-xs uppercase tracking-wide text-slate mb-3">Skip log summary</p>
+        <div className="grid grid-cols-2 gap-4 mb-3">
+          <div>
+            <p className="text-[11px] text-slate">This month</p>
+            <p className="font-display text-xl tabular">{thisMonthSkips}<span className="text-xs text-slate font-normal"> skips</span></p>
+          </div>
+          <div>
+            <p className="text-[11px] text-slate">All time</p>
+            <p className="font-display text-xl tabular">{state.skipLogs.length}<span className="text-xs text-slate font-normal"> skips</span></p>
+          </div>
+        </div>
+        {skipReasonRows.length > 0 && (
+          <div className="mb-3">
+            <p className="text-[11px] text-slate mb-1.5">By reason</p>
+            {skipReasonRows.map(([reason, count]) => (
+              <div key={reason} className="flex justify-between text-sm border-b border-white/5 py-1.5">
+                <span>{reason}</span>
+                <span className="tabular text-slate">{count}×</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {recentSkips.length > 0 ? (
+          <div>
+            <p className="text-[11px] text-slate mb-1.5">Recent</p>
+            {recentSkips.map((s) => (
+              <div key={s.id} className="flex justify-between text-sm py-1">
+                <span>{s.reason}{s.note ? ` — ${s.note}` : ''}</span>
+                <span className="text-xs text-slate">{s.date}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate">No skips logged yet. Good.</p>
+        )}
       </Card>
 
       <div className="grid grid-cols-[1fr_1.4fr] gap-4 items-start">
