@@ -7,14 +7,20 @@ const DEFAULT_STATE = {
   exercises: [],
   // { id, exerciseId, date, sets: [{weight, reps}] }
   workoutLogs: [],
-  // { id, date, weightKg }
+  // { id, date, time (ISO), weightKg } — every entry kept, never overwritten
   bodyLogs: [],
-  // { id, date, type, valueCm }
+  // { id, date, time (ISO), type, valueCm } — every entry kept
   measurementLogs: [],
   // { id, date, reason, note }
   skipLogs: [],
   streak: { current: 0, longest: 0, lastWorkoutDate: null },
-  settings: { weeklyGoal: 5, plateauDays: 60, defaultRestSeconds: 90 },
+  settings: {
+    weeklyGoal: 5,
+    plateauDays: 60,
+    defaultRestSeconds: 90,
+    weightUnit: 'kg', // 'kg' | 'lb'
+    measurementUnit: 'cm', // 'cm' | 'in'
+  },
 }
 
 function load() {
@@ -68,3 +74,16 @@ export function daysAgo(dateStr) {
 export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 export const DEFAULT = DEFAULT_STATE
 export const uid = () => Math.random().toString(36).slice(2, 10)
+
+// unit conversion — everything is stored canonically in kg / cm
+export const kgToLb = (kg) => kg * 2.20462
+export const lbToKg = (lb) => lb / 2.20462
+export const cmToIn = (cm) => cm / 2.54
+export const inToCm = (inch) => inch * 2.54
+
+export function formatWeight(kg, unit) {
+  return unit === 'lb' ? kgToLb(kg).toFixed(1) : kg.toFixed(1)
+}
+export function formatLength(cm, unit) {
+  return unit === 'in' ? cmToIn(cm).toFixed(1) : cm.toFixed(1)
+}
