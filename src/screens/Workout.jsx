@@ -44,6 +44,7 @@ function SetLogger({ exercise, state, setState, onRestStart }) {
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
   const [prBanner, setPrBanner] = useState(null)
+  const [restPrompt, setRestPrompt] = useState(null) // seconds value while prompt open, or null
   const todayStr = new Date().toDateString()
 
   const allLogs = state.workoutLogs.filter((l) => l.exerciseId === exercise.id).sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -99,7 +100,8 @@ function SetLogger({ exercise, state, setState, onRestStart }) {
       return { ...s, workoutLogs, streak }
     })
     setReps('')
-    onRestStart(exercise.restSeconds)
+    // don't auto-start — ask how long this time, since recovery time varies set to set
+    setRestPrompt(exercise.restSeconds)
   }
 
   return (
@@ -124,6 +126,27 @@ function SetLogger({ exercise, state, setState, onRestStart }) {
         </div>
       )}
       {prBanner && <div className="rounded-lg bg-signal/15 border border-signal/40 px-3 py-2 text-xs text-signal font-medium">{prBanner.text}</div>}
+
+      {restPrompt !== null && (
+        <div className="rounded-lg bg-ink border border-signal/40 px-3 py-2.5 flex items-center gap-2">
+          <span className="text-xs text-slate shrink-0">Rest for</span>
+          <input
+            type="number"
+            value={restPrompt}
+            onChange={(e) => setRestPrompt(+e.target.value)}
+            className="w-20 bg-inkraise border border-white/10 rounded-md px-2 py-1 text-sm tabular outline-none focus:border-signal"
+          />
+          <span className="text-xs text-slate shrink-0">sec</span>
+          <div className="flex-1" />
+          <button
+            onClick={() => { onRestStart(restPrompt); setRestPrompt(null) }}
+            className="rounded-md bg-signal text-ink px-3 py-1.5 text-xs font-semibold"
+          >
+            Start rest
+          </button>
+          <button onClick={() => setRestPrompt(null)} className="text-xs text-slate px-1">Skip</button>
+        </div>
+      )}
 
       {todaysLog && todaysLog.sets.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
