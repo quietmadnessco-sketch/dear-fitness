@@ -6,13 +6,24 @@ export default function Progress({ store }) {
   const [state] = store
   const [selected, setSelected] = useState(state.exercises[0]?.id || null)
 
-  const logs = state.workoutLogs.filter((l) => l.exerciseId === selected).sort((a, b) => new Date(a.date) - new Date(b.date))
-  const chartData = logs.map((l) => ({
+  const logsAsc = state.workoutLogs.filter((l) => l.exerciseId === selected).sort((a, b) => new Date(a.date) - new Date(b.date))
+  const chartData = logsAsc.map((l) => ({
     date: new Date(l.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
     topSet: Math.max(...l.sets.map((s) => s.weight)),
   }))
-  const bestWeight = logs.length ? Math.max(...logs.flatMap((l) => l.sets.map((s) => s.weight))) : null
-  const bestVolume = logs.length ? Math.max(...logs.map((l) => l.sets.reduce((s, set) => s + set.weight * set.reps, 0))) : null
+  const bestWeight = logsAsc.length ? Math.max(...logsAsc.flatMap((l) => l.sets.map((s) => s.weight))) : null
+  const bestVolume = logsAsc.length ? Math.max(...logsAsc.map((l) => l.sets.reduce((s, set) => s + set.weight * set.reps, 0))) : null
+  const totalWorkouts = logsAsc.length
+
+  // annotate each session with running best-so-far to flag PR sessions, then reverse for display (newest first)
+  let runningBest = 0
+  const annotated = logsAsc.map((l) => {
+    const top = Math.max(...l.sets.map((s) => s.weight))
+    const volume = l.sets.reduce((s, set) => s + set.weight * set.reps, 0)
+    const isPr = top > runningBest
+    if (top > runningBest) runningBest = top
+    return { ...l, top, volume, isPr }
+  }).reverse()
 
   return (
     <div className="p-8 space-y-4">
@@ -34,13 +45,14 @@ export default function Progress({ store }) {
             ))}
           </div>
 
-          {logs.length === 0 ? (
+          {logsAsc.length === 0 ? (
             <p className="text-sm text-slate">No sets logged for this exercise yet.</p>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <StatCard label="Best weight" value={bestWeight} unit="kg" />
                 <StatCard label="Best session volume" value={bestVolume?.toLocaleString()} unit="kg" />
+                <StatCard label="Sessions logged" value={totalWorkouts} />
               </div>
 
               {chartData.length > 1 && (
@@ -57,12 +69,22 @@ export default function Progress({ store }) {
               )}
 
               <Card>
-                <p className="text-xs uppercase tracking-wide text-slate mb-2.5">History</p>
+                <p className="text-xs uppercase tracking-wide text-slate mb-3">History</p>
                 <div className="max-h-96 overflow-y-auto">
-                  {[...logs].reverse().map((l) => (
-                    <div key={l.id} className="flex justify-between border-b border-white/10 py-2">
-                      <p className="text-sm">{l.sets.map((s) => `${s.weight}×${s.reps}`).join('  ·  ')}</p>
-                      <p className="text-xs text-slate shrink-0 ml-3">{l.date}</p>
+                  <div className="grid grid-cols-[auto_1fr_auto_auto] gap-x-4 text-[11px] uppercase tracking-wide text-slate pb-2 border-b border-white/10">
+                    <span>Date</span>
+                    <span>Sets</span>
+                    <span className="text-right">Volume</span>
+                    <span className="text-right">Top</span>
+                  </div>
+                  {annotated.map((l) => (
+                    <div key={l.id} className="grid grid-cols-[auto_1fr_auto_auto] gap-x-4 items-center py-2.5 border-b border-white/5">
+                      <span className="text-xs text-slate whitespace-nowrap">{l.date}</span>
+                      <span className="text-sm truncate">{l.sets.map((s) => `${s.weight}×${s.reps}`).join('  ·  ')}</span>
+                      <span className="tabular text-xs text-right text-slate">{l.volume.toLocaleString()}kg</span>
+                      <span className={`tabular text-xs text-right font-semibold ${l.isPr ? 'text-signal' : 'text-chalk'}`}>
+                        {l.top}kg{l.isPr && ' 🔥'}
+                      </span>
                     </div>
                   ))}
                 </div>
