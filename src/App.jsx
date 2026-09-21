@@ -91,7 +91,7 @@ const btnPrimary = "bg-gradient-to-b from-[#FF7D52] to-signal text-ink font-semi
 
 function Card({ children, className = '' }) {
   return (
-    <div className={`rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 ${className}`}>
+    <div className={`rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 overflow-hidden ${className}`}>
       {children}
     </div>
   )
@@ -425,10 +425,10 @@ function ExerciseLogCard({ exercise, state, setState }) {
 
       <div className="flex gap-2">
         <input value={weight} onChange={(e) => setWeight(e.target.value)} type="number" inputMode="decimal" placeholder="kg"
-          className="flex-1 bg-ink border border-white/10 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-signal tabular-nums" />
+          className="flex-1 min-w-0 bg-ink border border-white/10 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-signal tabular-nums" />
         <input value={reps} onChange={(e) => setReps(e.target.value)} type="number" inputMode="numeric" placeholder="reps"
-          className="flex-1 bg-ink border border-white/10 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-signal tabular-nums" />
-        <button onClick={logSet} className={`${btnPrimary} rounded-xl px-4 text-[14px]`}>Log</button>
+          className="flex-1 min-w-0 bg-ink border border-white/10 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-signal tabular-nums" />
+        <button onClick={logSet} className={`${btnPrimary} rounded-xl px-4 text-[14px] shrink-0`}>Log</button>
       </div>
     </Card>
   )
