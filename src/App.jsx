@@ -581,6 +581,7 @@ function MeasurementsPanel({ state, setState, onBack }) {
   const [mType, setMType] = useState(MEASURE_TYPES[0])
   const [mValue, setMValue] = useState('')
   const [filterType, setFilterType] = useState('All')
+  const [showHistory, setShowHistory] = useState(false)
 
   const setMeasurementUnit = (u) => setState((s) => ({ ...s, settings: { ...s.settings, measurementUnit: u } }))
 
@@ -603,6 +604,34 @@ function MeasurementsPanel({ state, setState, onBack }) {
     const change = latestM && first && latestM.id !== first.id ? latestM.valueCm - first.valueCm : null
     return { type: t, latest: latestM, change }
   }).filter((r) => r.latest)
+
+  if (showHistory) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowHistory(false)} className="p-1 -ml-1">{Icon.back('w-5 h-5')}</button>
+          <p className="font-display text-[17px] font-semibold flex-1">Measurement history</p>
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-ink border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-signal">
+            <option value="All">All types</option>
+            {typesLogged.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <Card>
+          <div className="max-h-[70vh] overflow-y-auto">
+            {filteredLogs.length === 0 ? <p className="text-[13px] text-slate">No entries yet.</p> : filteredLogs.map((m) => (
+              <div key={m.id} className="flex justify-between items-center border-b border-white/5 py-2.5">
+                <div>
+                  <p className="text-[14px]">{m.type} — <span className="tabular-nums">{fmtL(m.valueCm, measurementUnit)}{measurementUnit}</span></p>
+                  <p className="text-[11px] text-slate">{new Date(m.time || m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                </div>
+                <button onClick={() => deleteMeasurement(m.id)}>{Icon.trash('w-3.5 h-3.5 text-slate')}</button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -640,26 +669,14 @@ function MeasurementsPanel({ state, setState, onBack }) {
         </Card>
       )}
 
-      <Card>
-        <div className="flex items-center justify-between mb-2.5">
-          <p className="text-[11px] uppercase tracking-wide text-slate font-medium">History</p>
-          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-ink border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-signal">
-            <option value="All">All types</option>
-            {typesLogged.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+      <button onClick={() => setShowHistory(true)} className="w-full flex items-center gap-3.5 rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 text-left">
+        <div className="w-10 h-10 rounded-xl bg-ink flex items-center justify-center shrink-0">{Icon.chart('w-5 h-5 text-signal')}</div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[14px] font-medium">History</p>
+          <p className="text-[12px] text-slate">{measurementLogs.length > 0 ? `${measurementLogs.length} entries` : 'No entries yet'}</p>
         </div>
-        <div className="max-h-72 overflow-y-auto">
-          {filteredLogs.length === 0 ? <p className="text-[13px] text-slate">No entries yet.</p> : filteredLogs.map((m) => (
-            <div key={m.id} className="flex justify-between items-center border-b border-white/5 py-2">
-              <div>
-                <p className="text-[13px]">{m.type} — <span className="tabular-nums">{fmtL(m.valueCm, measurementUnit)}{measurementUnit}</span></p>
-                <p className="text-[10px] text-slate">{new Date(m.time || m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
-              </div>
-              <button onClick={() => deleteMeasurement(m.id)}>{Icon.trash('w-3.5 h-3.5 text-slate')}</button>
-            </div>
-          ))}
-        </div>
-      </Card>
+        {Icon.chevron('w-4 h-4 text-slate shrink-0')}
+      </button>
     </div>
   )
 }
