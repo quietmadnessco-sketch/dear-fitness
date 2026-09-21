@@ -580,6 +580,7 @@ function MeasurementsPanel({ state, setState, onBack }) {
   const measurementUnit = state.settings.measurementUnit
   const [mType, setMType] = useState(MEASURE_TYPES[0])
   const [mValue, setMValue] = useState('')
+  const [filterType, setFilterType] = useState('All')
 
   const setMeasurementUnit = (u) => setState((s) => ({ ...s, settings: { ...s.settings, measurementUnit: u } }))
 
@@ -593,6 +594,8 @@ function MeasurementsPanel({ state, setState, onBack }) {
   const deleteMeasurement = (id) => setState((s) => ({ ...s, measurementLogs: s.measurementLogs.filter((m) => m.id !== id) }))
 
   const measurementLogs = [...state.measurementLogs].sort((a, b) => new Date(b.time || b.date) - new Date(a.time || a.date))
+  const typesLogged = MEASURE_TYPES.filter((t) => measurementLogs.some((m) => m.type === t))
+  const filteredLogs = filterType === 'All' ? measurementLogs : measurementLogs.filter((m) => m.type === filterType)
   const latestByType = MEASURE_TYPES.map((t) => {
     const rows = measurementLogs.filter((m) => m.type === t)
     const first = [...rows].sort((a, b) => new Date(a.time || a.date) - new Date(b.time || b.date))[0]
@@ -638,9 +641,15 @@ function MeasurementsPanel({ state, setState, onBack }) {
       )}
 
       <Card>
-        <p className="text-[11px] uppercase tracking-wide text-slate mb-2 font-medium">History</p>
+        <div className="flex items-center justify-between mb-2.5">
+          <p className="text-[11px] uppercase tracking-wide text-slate font-medium">History</p>
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-ink border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-signal">
+            <option value="All">All types</option>
+            {typesLogged.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
         <div className="max-h-72 overflow-y-auto">
-          {measurementLogs.length === 0 ? <p className="text-[13px] text-slate">No entries yet.</p> : measurementLogs.map((m) => (
+          {filteredLogs.length === 0 ? <p className="text-[13px] text-slate">No entries yet.</p> : filteredLogs.map((m) => (
             <div key={m.id} className="flex justify-between items-center border-b border-white/5 py-2">
               <div>
                 <p className="text-[13px]">{m.type} — <span className="tabular-nums">{fmtL(m.valueCm, measurementUnit)}{measurementUnit}</span></p>
@@ -655,10 +664,38 @@ function MeasurementsPanel({ state, setState, onBack }) {
   )
 }
 
+function WeightHistoryPanel({ state, setState, onBack }) {
+  const weightUnit = state.settings.weightUnit
+  const sorted = [...state.bodyLogs].sort((a, b) => new Date(b.time || b.date) - new Date(a.time || a.date))
+  const deleteBodyLog = (id) => setState((s) => ({ ...s, bodyLogs: s.bodyLogs.filter((l) => l.id !== id) }))
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="p-1 -ml-1">{Icon.back('w-5 h-5')}</button>
+        <p className="font-display text-[17px] font-semibold flex-1">Weigh-in history</p>
+      </div>
+      <Card>
+        <div className="max-h-[70vh] overflow-y-auto space-y-0.5">
+          {sorted.length === 0 ? <p className="text-[13px] text-slate">No entries yet.</p> : sorted.map((l) => (
+            <div key={l.id} className="flex justify-between items-center border-b border-white/5 py-2.5">
+              <div>
+                <p className="text-[14px] tabular-nums">{fmtW(l.weightKg, weightUnit)} {weightUnit}</p>
+                <p className="text-[11px] text-slate">{new Date(l.time || l.date).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+              </div>
+              <button onClick={() => deleteBodyLog(l.id)}>{Icon.trash('w-3.5 h-3.5 text-slate')}</button>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 function BodySubscreen({ state, setState }) {
   const weightUnit = state.settings.weightUnit
   const [weight, setWeight] = useState('')
-  const [showMeasurements, setShowMeasurements] = useState(false)
+  const [panel, setPanel] = useState(null) // null | 'measurements' | 'weightHistory'
 
   const setWeightUnit = (u) => setState((s) => ({ ...s, settings: { ...s.settings, weightUnit: u } }))
 
@@ -681,14 +718,12 @@ function BodySubscreen({ state, setState }) {
     setState((s) => ({ ...s, bodyLogs: [...s.bodyLogs, { id: uid(), date: now.toDateString(), time: now.toISOString(), weightKg: kg }] }))
     setWeight('')
   }
-  const deleteBodyLog = (id) => setState((s) => ({ ...s, bodyLogs: s.bodyLogs.filter((l) => l.id !== id) }))
 
   const measurementCount = state.measurementLogs.length
   const measurementTypesLogged = new Set(state.measurementLogs.map((m) => m.type)).size
 
-  if (showMeasurements) {
-    return <MeasurementsPanel state={state} setState={setState} onBack={() => setShowMeasurements(false)} />
-  }
+  if (panel === 'measurements') return <MeasurementsPanel state={state} setState={setState} onBack={() => setPanel(null)} />
+  if (panel === 'weightHistory') return <WeightHistoryPanel state={state} setState={setState} onBack={() => setPanel(null)} />
 
   return (
     <div className="space-y-4">
@@ -731,24 +766,18 @@ function BodySubscreen({ state, setState }) {
         <button onClick={logWeight} className={`${btnPrimary} rounded-xl px-4 py-3 text-[14px]`}>Log</button>
       </Card>
 
-      <Card>
-        <p className="text-[11px] uppercase tracking-wide text-slate mb-2 font-medium">Weigh-in history</p>
-        <div className="max-h-52 overflow-y-auto space-y-0.5">
-          {sorted.length === 0 ? <p className="text-[13px] text-slate">No entries yet.</p> : [...sorted].reverse().map((l) => (
-            <div key={l.id} className="flex justify-between items-center border-b border-white/5 py-2">
-              <div>
-                <p className="text-[13px] tabular-nums">{fmtW(l.weightKg, weightUnit)} {weightUnit}</p>
-                <p className="text-[10px] text-slate">{new Date(l.time || l.date).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
-              </div>
-              <button onClick={() => deleteBodyLog(l.id)}>{Icon.trash('w-3.5 h-3.5 text-slate')}</button>
-            </div>
-          ))}
+      {/* Both history sections collapsed behind single entry points — tap to open,
+          instead of permanently eating vertical space on the main Body screen. */}
+      <button onClick={() => setPanel('weightHistory')} className="w-full flex items-center gap-3.5 rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 text-left">
+        <div className="w-10 h-10 rounded-xl bg-ink flex items-center justify-center shrink-0">{Icon.scale('w-5 h-5 text-signal')}</div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[14px] font-medium">Weigh-in history</p>
+          <p className="text-[12px] text-slate">{sorted.length > 0 ? `${sorted.length} entries logged` : 'No entries yet'}</p>
         </div>
-      </Card>
+        {Icon.chevron('w-4 h-4 text-slate shrink-0')}
+      </button>
 
-      {/* Measurements collapsed behind one entry point — opens its own panel instead of
-          permanently taking space here with a dropdown + form + tables + history. */}
-      <button onClick={() => setShowMeasurements(true)} className="w-full flex items-center gap-3.5 rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 text-left">
+      <button onClick={() => setPanel('measurements')} className="w-full flex items-center gap-3.5 rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 text-left">
         <div className="w-10 h-10 rounded-xl bg-ink flex items-center justify-center shrink-0">{Icon.flag('w-5 h-5 text-signal')}</div>
         <div className="flex-1 min-w-0">
           <p className="text-[14px] font-medium">Measurements</p>
