@@ -11,7 +11,7 @@ const STORAGE_KEY = 'dear-fitness:v2' // unchanged on purpose — don't wipe liv
 
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Other']
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-const MEASURE_TYPES = ['Waist', 'Chest', 'Hips', 'Thigh', 'Arms', 'Calves', 'Shoulders', 'Neck']
+const MEASURE_TYPES = ['Chest', 'Shoulders', 'Back', 'Biceps', 'Forearms', 'Waist', 'Hips', 'Thighs', 'Calves', 'Neck']
 const SKIP_REASONS = ['Sick', 'Too busy', 'Low motivation', 'Sore / recovering', 'Travel', 'Other']
 
 const DEFAULT_STATE = {
@@ -97,13 +97,14 @@ function Card({ children, className = '' }) {
   )
 }
 
-function StatBlock({ label, value, unit, accent }) {
+function StatBlock({ label, value, unit, accent, delta }) {
   return (
     <Card>
       <p className="text-[11px] uppercase tracking-wide text-slate font-medium">{label}</p>
       <p className="font-display text-[26px] font-semibold mt-1.5 tabular-nums" style={accent ? { color: accent } : undefined}>
         {value} {unit && <span className="text-sm text-slate font-medium">{unit}</span>}
       </p>
+      {delta && <p className={`text-[12px] mt-0.5 font-medium ${delta.good ? 'text-moss' : 'text-signal'}`}>{delta.text}</p>}
     </Card>
   )
 }
@@ -575,33 +576,12 @@ function ProgressScreen({ state }) {
    app instead of a dashboard crammed onto a phone.
    ========================================================================= */
 
-function BodySubscreen({ state, setState }) {
-  const weightUnit = state.settings.weightUnit
+function MeasurementsPanel({ state, setState, onBack }) {
   const measurementUnit = state.settings.measurementUnit
-  const [weight, setWeight] = useState('')
   const [mType, setMType] = useState(MEASURE_TYPES[0])
   const [mValue, setMValue] = useState('')
 
-  const setWeightUnit = (u) => setState((s) => ({ ...s, settings: { ...s.settings, weightUnit: u } }))
   const setMeasurementUnit = (u) => setState((s) => ({ ...s, settings: { ...s.settings, measurementUnit: u } }))
-
-  const sorted = [...state.bodyLogs].sort((a, b) => new Date(a.time || a.date) - new Date(b.time || b.date))
-  const byDay = {}
-  sorted.forEach((l) => { byDay[l.date] = byDay[l.date] || []; byDay[l.date].push(l.weightKg) })
-  const dailyAverages = Object.entries(byDay).map(([date, vals]) => ({ date, avgKg: vals.reduce((a, b) => a + b, 0) / vals.length }))
-  const last7 = dailyAverages.slice(-7)
-  const avg7 = last7.length ? last7.reduce((s, d) => s + d.avgKg, 0) / last7.length : null
-  const latest = sorted[sorted.length - 1]
-  const chartData = dailyAverages.slice(-30).map((d) => ({ date: new Date(d.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }), weight: weightUnit === 'lb' ? kgToLb(d.avgKg) : d.avgKg }))
-
-  const logWeight = () => {
-    const raw = parseFloat(weight); if (!raw) return
-    const kg = weightUnit === 'lb' ? lbToKg(raw) : raw
-    const now = new Date()
-    setState((s) => ({ ...s, bodyLogs: [...s.bodyLogs, { id: uid(), date: now.toDateString(), time: now.toISOString(), weightKg: kg }] }))
-    setWeight('')
-  }
-  const deleteBodyLog = (id) => setState((s) => ({ ...s, bodyLogs: s.bodyLogs.filter((l) => l.id !== id) }))
 
   const logMeasurement = () => {
     const raw = parseFloat(mValue); if (!raw) return
@@ -623,6 +603,95 @@ function BodySubscreen({ state, setState }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="p-1 -ml-1">{Icon.back('w-5 h-5')}</button>
+        <p className="font-display text-[17px] font-semibold flex-1">Measurements</p>
+        <div className="flex rounded-lg border border-white/10 overflow-hidden text-[11px] font-medium">
+          <button onClick={() => setMeasurementUnit('cm')} className={`px-2.5 py-1 ${measurementUnit === 'cm' ? 'bg-signal text-ink' : 'text-slate'}`}>Cm</button>
+          <button onClick={() => setMeasurementUnit('in')} className={`px-2.5 py-1 ${measurementUnit === 'in' ? 'bg-signal text-ink' : 'text-slate'}`}>In</button>
+        </div>
+      </div>
+
+      <Card className="space-y-2.5">
+        <select value={mType} onChange={(e) => setMType(e.target.value)} className="w-full bg-ink border border-white/10 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-signal">
+          {MEASURE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <div className="flex gap-2">
+          <TextField value={mValue} onChange={(e) => setMValue(e.target.value)} type="number" inputMode="decimal" step="0.1" placeholder={measurementUnit} />
+          <button onClick={logMeasurement} className={`${btnPrimary} rounded-xl px-4 text-[14px] shrink-0`}>Log</button>
+        </div>
+      </Card>
+
+      {latestByType.length > 0 && (
+        <Card>
+          <p className="text-[11px] uppercase tracking-wide text-slate mb-2 font-medium">Current &amp; change</p>
+          {latestByType.map((r) => (
+            <div key={r.type} className="flex justify-between border-b border-white/5 py-1.5">
+              <span className="text-[13px]">{r.type}</span>
+              <span className="tabular-nums text-[13px]">
+                {fmtL(r.latest.valueCm, measurementUnit)}{measurementUnit}{' '}
+                {r.change !== null && <span className={`text-[11px] ml-1 ${r.change < 0 ? 'text-moss' : r.change > 0 ? 'text-signal' : 'text-slate'}`}>({r.change > 0 ? '+' : ''}{fmtL(Math.abs(r.change), measurementUnit)})</span>}
+              </span>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      <Card>
+        <p className="text-[11px] uppercase tracking-wide text-slate mb-2 font-medium">History</p>
+        <div className="max-h-72 overflow-y-auto">
+          {measurementLogs.length === 0 ? <p className="text-[13px] text-slate">No entries yet.</p> : measurementLogs.map((m) => (
+            <div key={m.id} className="flex justify-between items-center border-b border-white/5 py-2">
+              <div>
+                <p className="text-[13px]">{m.type} — <span className="tabular-nums">{fmtL(m.valueCm, measurementUnit)}{measurementUnit}</span></p>
+                <p className="text-[10px] text-slate">{new Date(m.time || m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+              </div>
+              <button onClick={() => deleteMeasurement(m.id)}>{Icon.trash('w-3.5 h-3.5 text-slate')}</button>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function BodySubscreen({ state, setState }) {
+  const weightUnit = state.settings.weightUnit
+  const [weight, setWeight] = useState('')
+  const [showMeasurements, setShowMeasurements] = useState(false)
+
+  const setWeightUnit = (u) => setState((s) => ({ ...s, settings: { ...s.settings, weightUnit: u } }))
+
+  const sorted = [...state.bodyLogs].sort((a, b) => new Date(a.time || a.date) - new Date(b.time || b.date))
+  const byDay = {}
+  sorted.forEach((l) => { byDay[l.date] = byDay[l.date] || []; byDay[l.date].push(l.weightKg) })
+  const dailyAverages = Object.entries(byDay).map(([date, vals]) => ({ date, avgKg: vals.reduce((a, b) => a + b, 0) / vals.length }))
+  const last7 = dailyAverages.slice(-7)
+  const avg7 = last7.length ? last7.reduce((s, d) => s + d.avgKg, 0) / last7.length : null
+  const latest = sorted[sorted.length - 1]
+  const first = sorted[0]
+  // total change since the first ever weigh-in — mirrors how measurement change is shown
+  const weightChange = latest && first && latest.id !== first.id ? latest.weightKg - first.weightKg : null
+  const chartData = dailyAverages.slice(-30).map((d) => ({ date: new Date(d.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }), weight: weightUnit === 'lb' ? kgToLb(d.avgKg) : d.avgKg }))
+
+  const logWeight = () => {
+    const raw = parseFloat(weight); if (!raw) return
+    const kg = weightUnit === 'lb' ? lbToKg(raw) : raw
+    const now = new Date()
+    setState((s) => ({ ...s, bodyLogs: [...s.bodyLogs, { id: uid(), date: now.toDateString(), time: now.toISOString(), weightKg: kg }] }))
+    setWeight('')
+  }
+  const deleteBodyLog = (id) => setState((s) => ({ ...s, bodyLogs: s.bodyLogs.filter((l) => l.id !== id) }))
+
+  const measurementCount = state.measurementLogs.length
+  const measurementTypesLogged = new Set(state.measurementLogs.map((m) => m.type)).size
+
+  if (showMeasurements) {
+    return <MeasurementsPanel state={state} setState={setState} onBack={() => setShowMeasurements(false)} />
+  }
+
+  return (
+    <div className="space-y-4">
       <div className="flex justify-between items-center">
         <p className="font-display text-[15px] font-semibold">Weight</p>
         <div className="flex rounded-lg border border-white/10 overflow-hidden text-[11px] font-medium">
@@ -632,7 +701,12 @@ function BodySubscreen({ state, setState }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <StatBlock label="Latest" value={latest ? fmtW(latest.weightKg, weightUnit) : '—'} unit={latest ? weightUnit : ''} />
+        <StatBlock
+          label="Latest"
+          value={latest ? fmtW(latest.weightKg, weightUnit) : '—'}
+          unit={latest ? weightUnit : ''}
+          delta={weightChange !== null ? { good: weightChange < 0, text: `${weightChange > 0 ? '+' : ''}${fmtW(weightChange, weightUnit)}${weightUnit} since first log` } : null}
+        />
         <StatBlock label="7-day avg" value={avg7 !== null ? fmtW(avg7, weightUnit) : '—'} unit={avg7 !== null ? weightUnit : ''} />
       </div>
 
@@ -654,7 +728,7 @@ function BodySubscreen({ state, setState }) {
           <p className="text-[11px] text-slate mb-1.5">Log a weigh-in</p>
           <TextField value={weight} onChange={(e) => setWeight(e.target.value)} type="number" inputMode="decimal" step="0.1" placeholder={weightUnit} />
         </div>
-        <button onClick={logWeight} className="rounded-xl bg-signal text-ink px-4 py-3 text-[14px] font-semibold">Log</button>
+        <button onClick={logWeight} className={`${btnPrimary} rounded-xl px-4 py-3 text-[14px]`}>Log</button>
       </Card>
 
       <Card>
@@ -672,55 +746,16 @@ function BodySubscreen({ state, setState }) {
         </div>
       </Card>
 
-      <div className="flex justify-between items-center pt-1">
-        <p className="font-display text-[15px] font-semibold">Measurements</p>
-        <div className="flex rounded-lg border border-white/10 overflow-hidden text-[11px] font-medium">
-          <button onClick={() => setMeasurementUnit('cm')} className={`px-2.5 py-1 ${measurementUnit === 'cm' ? 'bg-signal text-ink' : 'text-slate'}`}>Cm</button>
-          <button onClick={() => setMeasurementUnit('in')} className={`px-2.5 py-1 ${measurementUnit === 'in' ? 'bg-signal text-ink' : 'text-slate'}`}>In</button>
+      {/* Measurements collapsed behind one entry point — opens its own panel instead of
+          permanently taking space here with a dropdown + form + tables + history. */}
+      <button onClick={() => setShowMeasurements(true)} className="w-full flex items-center gap-3.5 rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 text-left">
+        <div className="w-10 h-10 rounded-xl bg-ink flex items-center justify-center shrink-0">{Icon.flag('w-5 h-5 text-signal')}</div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[14px] font-medium">Measurements</p>
+          <p className="text-[12px] text-slate">{measurementCount > 0 ? `${measurementTypesLogged} tracked · ${measurementCount} entries` : 'Chest, shoulders, back, arms, waist, legs & more'}</p>
         </div>
-      </div>
-
-      <Card className="space-y-2.5">
-        <select value={mType} onChange={(e) => setMType(e.target.value)} className="w-full bg-ink border border-white/10 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-signal">
-          {MEASURE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <div className="flex gap-2">
-          <TextField value={mValue} onChange={(e) => setMValue(e.target.value)} type="number" inputMode="decimal" step="0.1" placeholder={measurementUnit} />
-          <button onClick={logMeasurement} className="rounded-xl bg-signal text-ink px-4 text-[14px] font-semibold shrink-0">Log</button>
-        </div>
-      </Card>
-
-      {latestByType.length > 0 && (
-        <Card>
-          <p className="text-[11px] uppercase tracking-wide text-slate mb-2 font-medium">Current &amp; change</p>
-          {latestByType.map((r) => (
-            <div key={r.type} className="flex justify-between border-b border-white/5 py-1.5">
-              <span className="text-[13px]">{r.type}</span>
-              <span className="tabular-nums text-[13px]">
-                {fmtL(r.latest.valueCm, measurementUnit)}{measurementUnit}{' '}
-                {r.change !== null && <span className={`text-[11px] ml-1 ${r.change < 0 ? 'text-moss' : r.change > 0 ? 'text-signal' : 'text-slate'}`}>({r.change > 0 ? '+' : ''}{fmtL(Math.abs(r.change), measurementUnit)})</span>}
-              </span>
-            </div>
-          ))}
-        </Card>
-      )}
-
-      {measurementLogs.length > 0 && (
-        <Card>
-          <p className="text-[11px] uppercase tracking-wide text-slate mb-2 font-medium">Measurement history</p>
-          <div className="max-h-52 overflow-y-auto">
-            {measurementLogs.map((m) => (
-              <div key={m.id} className="flex justify-between items-center border-b border-white/5 py-2">
-                <div>
-                  <p className="text-[13px]">{m.type} — <span className="tabular-nums">{fmtL(m.valueCm, measurementUnit)}{measurementUnit}</span></p>
-                  <p className="text-[10px] text-slate">{new Date(m.time || m.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
-                </div>
-                <button onClick={() => deleteMeasurement(m.id)}>{Icon.trash('w-3.5 h-3.5 text-slate')}</button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+        {Icon.chevron('w-4 h-4 text-slate shrink-0')}
+      </button>
     </div>
   )
 }
