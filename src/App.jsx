@@ -87,8 +87,14 @@ const Icon = {
    SHARED UI PRIMITIVES
    ========================================================================= */
 
+const btnPrimary = "bg-gradient-to-b from-[#FF7D52] to-signal text-ink font-semibold shadow-md shadow-signal/20 active:scale-[0.97] transition-all duration-150"
+
 function Card({ children, className = '' }) {
-  return <div className={`rounded-2xl bg-inkraise border border-white/[0.06] p-4 ${className}`}>{children}</div>
+  return (
+    <div className={`rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 ${className}`}>
+      {children}
+    </div>
+  )
 }
 
 function StatBlock({ label, value, unit, accent }) {
@@ -105,7 +111,7 @@ function StatBlock({ label, value, unit, accent }) {
 function ScreenHeader({ title, subtitle }) {
   return (
     <div className="px-5 pt-6 pb-4">
-      <h1 className="font-display text-[22px] font-semibold">{title}</h1>
+      <h1 className="font-display text-[24px] font-bold tracking-tight">{title}</h1>
       {subtitle && <p className="text-[13px] text-slate mt-0.5">{subtitle}</p>}
     </div>
   )
@@ -115,8 +121,8 @@ function Chip({ active, onClick, children }) {
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium border transition-colors ${
-        active ? 'bg-signal text-ink border-signal' : 'border-white/10 text-slate'
+      className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium border transition-all duration-150 ${
+        active ? 'bg-signal text-ink border-signal shadow-md shadow-signal/30 scale-[1.02]' : 'border-white/10 text-slate hover:border-white/20'
       }`}
     >
       {children}
@@ -128,7 +134,7 @@ function TextField(props) {
   return (
     <input
       {...props}
-      className="w-full bg-ink border border-white/10 rounded-xl px-3.5 py-3 text-[15px] outline-none focus:border-signal transition-colors placeholder:text-slatedim"
+      className="w-full bg-ink border border-white/10 rounded-xl px-3.5 py-3 text-[15px] outline-none focus:border-signal focus:ring-4 focus:ring-signal/10 transition-all placeholder:text-slatedim"
     />
   )
 }
@@ -206,7 +212,7 @@ function HomeScreen({ state, goTo }) {
           </div>
         </Card>
 
-        <button onClick={() => goTo('workout')} className="w-full rounded-2xl bg-signal text-ink p-5 text-left active:scale-[0.98] transition-transform">
+        <button onClick={() => goTo('workout')} className="w-full rounded-2xl bg-gradient-to-br from-[#FF8259] to-signal text-ink p-5 text-left active:scale-[0.98] transition-transform shadow-lg shadow-signal/25">
           <p className="text-[11px] uppercase tracking-wide font-semibold opacity-70">{alreadyTrainedToday ? 'Today — done ✓' : 'Today'}</p>
           <p className="font-display text-xl font-semibold mt-1">{todayName}</p>
           <p className="text-[13px] mt-1 opacity-80">
@@ -377,7 +383,11 @@ function ExerciseLogCard({ exercise, state, setState }) {
           Top of rep range 3 sessions running — try +2.5kg next time.
         </div>
       )}
-      {prBanner && <div className="rounded-xl bg-signal/15 border border-signal/40 px-3 py-2 text-[12px] text-signal font-medium">{prBanner}</div>}
+      {prBanner && (
+        <div className="rounded-xl bg-gradient-to-r from-signal/20 to-signal/5 border border-signal/40 px-3 py-2.5 text-[12px] text-signal font-semibold flex items-center gap-2">
+          <span className="text-base leading-none">🔥</span>{prBanner}
+        </div>
+      )}
 
       {restPhase === 'prompt' && (
         <div className="rounded-xl bg-ink border border-signal/40 px-3 py-2.5 flex items-center gap-2">
@@ -386,7 +396,7 @@ function ExerciseLogCard({ exercise, state, setState }) {
           <span className="text-[13px] text-slate shrink-0">sec</span>
           <div className="flex-1" />
           <button onClick={() => setRestPhase('idle')} className="text-[13px] text-slate px-1">Skip</button>
-          <button onClick={startRest} className="rounded-lg bg-signal text-ink px-3.5 py-1.5 text-[13px] font-semibold">Start</button>
+          <button onClick={startRest} className={`${btnPrimary} rounded-lg px-3.5 py-1.5 text-[13px]`}>Start</button>
         </div>
       )}
       {restPhase === 'running' && (
@@ -418,7 +428,7 @@ function ExerciseLogCard({ exercise, state, setState }) {
           className="flex-1 bg-ink border border-white/10 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-signal tabular-nums" />
         <input value={reps} onChange={(e) => setReps(e.target.value)} type="number" inputMode="numeric" placeholder="reps"
           className="flex-1 bg-ink border border-white/10 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-signal tabular-nums" />
-        <button onClick={logSet} className="rounded-xl bg-signal text-ink px-4 text-[14px] font-semibold">Log</button>
+        <button onClick={logSet} className={`${btnPrimary} rounded-xl px-4 text-[14px]`}>Log</button>
       </div>
     </Card>
   )
@@ -1016,7 +1026,7 @@ export default function App() {
   const [tab, setTab] = useState('home')
 
   return (
-    <div className="min-h-screen bg-ink text-chalk">
+    <div className="min-h-screen text-chalk" style={{ background: 'radial-gradient(circle at 50% 0%, #1a2432 0%, #131B26 55%)' }}>
       <div className="max-w-md mx-auto min-h-screen relative pb-20">
         {tab === 'home' && <HomeScreen state={state} goTo={setTab} />}
         {tab === 'workout' && <WorkoutScreen state={state} setState={setState} />}
@@ -1024,12 +1034,13 @@ export default function App() {
         {tab === 'more' && <MoreScreen state={state} setState={setState} />}
       </div>
 
-      <nav className="fixed bottom-0 inset-x-0 border-t border-white/[0.06] bg-ink/95 backdrop-blur z-30">
+      <nav className="fixed bottom-0 inset-x-0 border-t border-white/[0.06] bg-ink/90 backdrop-blur-xl z-30">
         <div className="max-w-md mx-auto grid grid-cols-4">
           {TABS.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)} className="flex flex-col items-center gap-1 py-2.5">
-              {t.icon(`w-5 h-5 ${tab === t.id ? 'text-signal' : 'text-slate'}`)}
-              <span className={`text-[10px] font-medium ${tab === t.id ? 'text-signal' : 'text-slate'}`}>{t.label}</span>
+            <button key={t.id} onClick={() => setTab(t.id)} className="relative flex flex-col items-center gap-1 py-2.5">
+              {tab === t.id && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-signal" />}
+              {t.icon(`w-5 h-5 transition-colors ${tab === t.id ? 'text-signal' : 'text-slate'}`)}
+              <span className={`text-[10px] font-medium transition-colors ${tab === t.id ? 'text-signal' : 'text-slate'}`}>{t.label}</span>
             </button>
           ))}
         </div>
