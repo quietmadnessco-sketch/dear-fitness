@@ -975,6 +975,51 @@ function SettingsSubscreen({ state, setState }) {
     URL.revokeObjectURL(url)
     setMsg('Downloaded.'); setTimeout(() => setMsg(''), 2000)
   }
+
+  // Human-readable export for Excel/Google Sheets — separate from the JSON
+  // backup above, which is machine-readable and used for Import.
+  const exportCSV = () => {
+    const esc = (v) => `"${String(v).replace(/"/g, '""')}"`
+    const rows = []
+
+    rows.push(['WORKOUT LOG'])
+    rows.push(['Date', 'Exercise', 'Muscle Group', 'Set #', 'Weight (kg)', 'Reps', 'Volume (kg)'])
+    ;[...state.workoutLogs].sort((a, b) => new Date(a.date) - new Date(b.date)).forEach((l) => {
+      const ex = state.exercises.find((e) => e.id === l.exerciseId)
+      l.sets.forEach((s, i) => {
+        rows.push([l.date, ex ? ex.name : 'Deleted exercise', ex ? ex.muscleGroup : '', i + 1, s.weight, s.reps, s.weight * s.reps])
+      })
+    })
+
+    rows.push([])
+    rows.push(['BODY WEIGHT'])
+    rows.push(['Date', 'Time', 'Weight (kg)'])
+    ;[...state.bodyLogs].sort((a, b) => new Date(a.time || a.date) - new Date(b.time || b.date)).forEach((l) => {
+      rows.push([l.date, l.time ? new Date(l.time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '', l.weightKg.toFixed(1)])
+    })
+
+    rows.push([])
+    rows.push(['MEASUREMENTS'])
+    rows.push(['Date', 'Type', 'Value (cm)'])
+    ;[...state.measurementLogs].sort((a, b) => new Date(a.time || a.date) - new Date(b.time || b.date)).forEach((m) => {
+      rows.push([m.date, m.type, m.valueCm.toFixed(1)])
+    })
+
+    rows.push([])
+    rows.push(['SKIP LOG'])
+    rows.push(['Date', 'Reason', 'Note'])
+    ;[...state.skipLogs].sort((a, b) => new Date(a.date) - new Date(b.date)).forEach((s) => {
+      rows.push([s.date, s.reason, s.note || ''])
+    })
+
+    const csv = rows.map((r) => r.map(esc).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }) // BOM so Excel reads UTF-8 correctly
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `dear-fitness-export-${new Date().toISOString().slice(0, 10)}.csv`; a.click()
+    URL.revokeObjectURL(url)
+    setMsg('Downloaded.'); setTimeout(() => setMsg(''), 2000)
+  }
   const importData = (e) => {
     const file = e.target.files[0]; if (!file) return
     const reader = new FileReader()
@@ -1011,10 +1056,12 @@ function SettingsSubscreen({ state, setState }) {
       <Card>
         <p className="text-[11px] uppercase tracking-wide text-slate mb-2 font-medium">Backup</p>
         <div className="flex gap-2">
-          <button onClick={exportData} className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/10 py-2.5 text-[13px] font-medium text-slate">{Icon.download('w-4 h-4')} Export</button>
+          <button onClick={exportData} className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/10 py-2.5 text-[13px] font-medium text-slate">{Icon.download('w-4 h-4')} Backup (.json)</button>
           <button onClick={() => fileRef.current.click()} className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-white/10 py-2.5 text-[13px] font-medium text-slate">{Icon.upload('w-4 h-4')} Import</button>
           <input ref={fileRef} type="file" accept="application/json" onChange={importData} className="hidden" />
         </div>
+        <button onClick={exportCSV} className={`w-full mt-2 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-medium ${btnPrimary}`}>{Icon.download('w-4 h-4')} Export for Excel (.csv)</button>
+        <p className="text-[11px] text-slate mt-2">Backup (.json) is for restoring your data in this app via Import. Excel export (.csv) is for viewing/analyzing in Excel or Google Sheets — it can't be imported back.</p>
         {msg && <p className="text-[11px] text-moss text-center mt-2">{msg}</p>}
       </Card>
 
