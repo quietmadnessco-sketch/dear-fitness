@@ -10,7 +10,6 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 const STORAGE_KEY = 'dear-fitness:v2' // unchanged on purpose — don't wipe live user data
 
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Other']
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const MEASURE_TYPES = ['Chest', 'Shoulders', 'Back', 'Biceps', 'Forearms', 'Waist', 'Hips', 'Thighs', 'Calves', 'Neck']
 const SKIP_REASONS = ['Sick', 'Too busy', 'Low motivation', 'Sore / recovering', 'Travel', 'Other']
 
@@ -164,8 +163,6 @@ function notifyRestOver(exerciseName) {
    ========================================================================= */
 
 function HomeScreen({ state, goTo }) {
-  const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' })
-  const todays = state.exercises.filter((e) => e.day === todayName)
   const last7 = state.workoutLogs.filter((l) => daysAgo(l.date) <= 6)
   const workoutDaysThisWeek = new Set(last7.map((l) => l.date)).size
   const weeklyGoal = state.settings.weeklyGoal
@@ -214,10 +211,10 @@ function HomeScreen({ state, goTo }) {
         </Card>
 
         <button onClick={() => goTo('workout')} className="w-full rounded-2xl bg-gradient-to-br from-[#FF8259] to-signal text-ink p-5 text-left active:scale-[0.98] transition-transform shadow-lg shadow-signal/25">
-          <p className="text-[11px] uppercase tracking-wide font-semibold opacity-70">{alreadyTrainedToday ? 'Today — done ✓' : 'Today'}</p>
-          <p className="font-display text-xl font-semibold mt-1">{todayName}</p>
+          <p className="text-[11px] uppercase tracking-wide font-semibold opacity-70">{alreadyTrainedToday ? 'Done today ✓' : 'Ready to train'}</p>
+          <p className="font-display text-xl font-semibold mt-1">{alreadyTrainedToday ? 'Nice work' : 'Start today\u2019s workout'}</p>
           <p className="text-[13px] mt-1 opacity-80">
-            {todays.length > 0 ? `${todays.length} exercise${todays.length > 1 ? 's' : ''} planned` : 'Nothing planned — tap to add exercises'}
+            {state.exercises.length > 0 ? `${state.exercises.length} exercise${state.exercises.length > 1 ? 's' : ''} in your routine` : 'Nothing set up yet — tap to add exercises'}
           </p>
         </button>
 
@@ -238,9 +235,8 @@ function HomeScreen({ state, goTo }) {
    WORKOUT
    ========================================================================= */
 
-function AddExerciseForm({ defaultDay, defaultRest, onAdd, onCancel }) {
+function AddExerciseForm({ defaultRest, onAdd, onCancel }) {
   const [name, setName] = useState('')
-  const [day, setDay] = useState(defaultDay)
   const [group, setGroup] = useState('Other')
   const [low, setLow] = useState(8)
   const [high, setHigh] = useState(12)
@@ -249,14 +245,9 @@ function AddExerciseForm({ defaultDay, defaultRest, onAdd, onCancel }) {
   return (
     <Card className="space-y-3">
       <TextField autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Exercise name" />
-      <div className="grid grid-cols-2 gap-2.5">
-        <select value={day} onChange={(e) => setDay(e.target.value)} className="bg-ink border border-white/10 rounded-xl px-3 py-3 text-[14px] outline-none focus:border-signal">
-          {DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <select value={group} onChange={(e) => setGroup(e.target.value)} className="bg-ink border border-white/10 rounded-xl px-3 py-3 text-[14px] outline-none focus:border-signal">
-          {MUSCLE_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
-        </select>
-      </div>
+      <select value={group} onChange={(e) => setGroup(e.target.value)} className="w-full bg-ink border border-white/10 rounded-xl px-3 py-3 text-[14px] outline-none focus:border-signal">
+        {MUSCLE_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
+      </select>
       <div className="grid grid-cols-3 gap-2.5">
         <label className="text-[11px] text-slate">Rep low
           <input type="number" value={low} onChange={(e) => setLow(+e.target.value)} className="mt-1 w-full bg-ink border border-white/10 rounded-xl px-2.5 py-2.5 text-[14px] outline-none focus:border-signal" /></label>
@@ -269,7 +260,7 @@ function AddExerciseForm({ defaultDay, defaultRest, onAdd, onCancel }) {
         <button onClick={onCancel} className="rounded-xl border border-white/10 text-slate px-4 py-2.5 text-[14px]">Cancel</button>
         <button
           disabled={!name.trim()}
-          onClick={() => name.trim() && onAdd({ id: uid(), name: name.trim(), day, muscleGroup: group, repRangeLow: low, repRangeHigh: high, restSeconds: rest })}
+          onClick={() => name.trim() && onAdd({ id: uid(), name: name.trim(), muscleGroup: group, repRangeLow: low, repRangeHigh: high, restSeconds: rest })}
           className="rounded-xl bg-signal text-ink px-4 py-2.5 text-[14px] font-semibold disabled:opacity-40"
         >
           Add exercise
@@ -310,24 +301,43 @@ function ExerciseLogCard({ exercise, state, setState }) {
   const plateauDays = state.settings.plateauDays
   const stalled = bestEverLog && daysAgo(bestEverLog.date) >= plateauDays && pastLogs.length > 0 && daysAgo(pastLogs[0].date) <= 14
 
+  const restEndAt = useRef(null) // wall-clock timestamp (ms) when rest should end — survives throttled/paused intervals
+  const restCompletedRef = useRef(false)
+
+  const tickRest = () => {
+    if (!restEndAt.current) return
+    const remaining = Math.max(0, Math.ceil((restEndAt.current - Date.now()) / 1000))
+    setRestRemaining(remaining)
+    if (remaining <= 0 && !restCompletedRef.current) {
+      restCompletedRef.current = true
+      clearInterval(restInterval.current)
+      playBeep()
+      notifyRestOver(exercise.name)
+      setTimeout(() => setRestPhase('idle'), 1200)
+    }
+  }
+
   const startRest = () => {
+    restCompletedRef.current = false
+    restEndAt.current = Date.now() + restTarget * 1000
     setRestRemaining(restTarget)
     setRestPhase('running')
     if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission()
-    restInterval.current = setInterval(() => {
-      setRestRemaining((r) => {
-        if (r <= 1) {
-          clearInterval(restInterval.current)
-          playBeep()
-          notifyRestOver(exercise.name)
-          setTimeout(() => setRestPhase('idle'), 1200)
-          return 0
-        }
-        return r - 1
-      })
-    }, 1000)
+    // Ticks every second while the tab is active. Browsers throttle or fully
+    // pause setInterval in a backgrounded tab/app, so this alone can't be
+    // trusted — the visibilitychange listener below recomputes from the
+    // real end timestamp the moment the tab comes back, so the countdown
+    // is always correct even if it looked "frozen" while you were away.
+    restInterval.current = setInterval(tickRest, 1000)
   }
-  const cancelRest = () => { clearInterval(restInterval.current); setRestPhase('idle') }
+  const cancelRest = () => { clearInterval(restInterval.current); restEndAt.current = null; setRestPhase('idle') }
+
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') tickRest() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const logSet = () => {
     const w = parseFloat(weight)
@@ -494,29 +504,31 @@ function ExerciseLogCard({ exercise, state, setState }) {
 
 function WorkoutScreen({ state, setState }) {
   const [adding, setAdding] = useState(false)
-  const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' })
-  const [viewDay, setViewDay] = useState(todayName)
-  const list = state.exercises.filter((e) => e.day === viewDay)
+  const groupsPresent = ['All', ...MUSCLE_GROUPS.filter((g) => state.exercises.some((e) => e.muscleGroup === g))]
+  const [group, setGroup] = useState('All')
+  const list = group === 'All' ? state.exercises : state.exercises.filter((e) => e.muscleGroup === group)
 
   return (
     <div className="pb-4">
-      <ScreenHeader title="Workout" subtitle="Plan and log today's session" />
-      <div className="px-5 flex gap-1.5 overflow-x-auto pb-1 mb-1">
-        {DAYS.map((d) => <Chip key={d} active={viewDay === d} onClick={() => setViewDay(d)}>{d.slice(0, 3)}</Chip>)}
-      </div>
+      <ScreenHeader title="Workout" subtitle="Your full routine — log any exercise, any day" />
+      {state.exercises.length > 0 && (
+        <div className="px-5 flex gap-1.5 overflow-x-auto pb-1 mb-1">
+          {groupsPresent.map((g) => <Chip key={g} active={group === g} onClick={() => setGroup(g)}>{g}</Chip>)}
+        </div>
+      )}
       <div className="px-5 space-y-3 mt-3">
         {list.map((ex) => <ExerciseLogCard key={ex.id} exercise={ex} state={state} setState={setState} />)}
-        {list.length === 0 && !adding && <p className="text-[14px] text-slate py-2">No exercises planned for {viewDay} yet.</p>}
+        {list.length === 0 && !adding && state.exercises.length > 0 && <p className="text-[14px] text-slate py-2">No exercises in this group yet.</p>}
+        {list.length === 0 && !adding && state.exercises.length === 0 && <p className="text-[14px] text-slate py-2">No exercises yet — add your routine below.</p>}
         {adding ? (
           <AddExerciseForm
-            defaultDay={viewDay}
             defaultRest={state.settings.defaultRestSeconds}
             onCancel={() => setAdding(false)}
             onAdd={(ex) => { setState((s) => ({ ...s, exercises: [...s.exercises, ex] })); setAdding(false) }}
           />
         ) : (
           <button onClick={() => setAdding(true)} className="w-full flex items-center justify-center gap-1.5 rounded-2xl border border-dashed border-white/20 text-slate py-3.5 text-[14px] font-medium">
-            {Icon.plus('w-4 h-4')} Add exercise to {viewDay}
+            {Icon.plus('w-4 h-4')} Add exercise
           </button>
         )}
       </div>
@@ -1129,7 +1141,7 @@ function SettingsSubscreen({ state, setState }) {
             <div key={ex.id} className="flex justify-between items-center border-b border-white/5 py-2.5">
               <div>
                 <p className="text-[13px]">{ex.name}</p>
-                <p className="text-[11px] text-slate">{ex.muscleGroup} · {ex.day} · {ex.restSeconds}s rest</p>
+                <p className="text-[11px] text-slate">{ex.muscleGroup} · {ex.restSeconds}s rest</p>
               </div>
               <button onClick={() => deleteExercise(ex.id)}>{Icon.trash('w-3.5 h-3.5 text-slate')}</button>
             </div>
