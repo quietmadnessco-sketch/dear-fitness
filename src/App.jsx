@@ -10,6 +10,19 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 const STORAGE_KEY = 'dear-fitness:v2' // unchanged on purpose — don't wipe live user data
 
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core', 'Other']
+
+// Common exercises per muscle group — a quick-pick list so most people never
+// have to type a name. Anything not here can still be typed manually in the
+// name field, which always stays editable.
+const EXERCISE_LIBRARY = {
+  Chest: ['Bench Press', 'Incline Bench Press', 'Decline Bench Press', 'Incline Dumbbell Press', 'Flat Dumbbell Press', 'Dumbbell Fly', 'Cable Fly', 'Push-up', 'Chest Dip', 'Machine Chest Press', 'Pec Deck'],
+  Back: ['Deadlift', 'Pull-up', 'Chin-up', 'Lat Pulldown', 'Barbell Row', 'Dumbbell Row', 'Seated Cable Row', 'T-Bar Row', 'Face Pull', 'Hyperextension', 'Rack Pull'],
+  Legs: ['Squat', 'Front Squat', 'Leg Press', 'Romanian Deadlift', 'Leg Extension', 'Leg Curl', 'Walking Lunge', 'Bulgarian Split Squat', 'Hip Thrust', 'Calf Raise', 'Goblet Squat'],
+  Shoulders: ['Overhead Press', 'Dumbbell Shoulder Press', 'Arnold Press', 'Lateral Raise', 'Front Raise', 'Rear Delt Fly', 'Upright Row', 'Shrugs', 'Cable Lateral Raise'],
+  Arms: ['Barbell Curl', 'Dumbbell Curl', 'Hammer Curl', 'Preacher Curl', 'Cable Curl', 'Tricep Pushdown', 'Skull Crusher', 'Overhead Tricep Extension', 'Close-Grip Bench Press', 'Dips'],
+  Core: ['Plank', 'Crunch', 'Hanging Leg Raise', 'Cable Crunch', 'Russian Twist', 'Ab Wheel Rollout', 'Sit-up', 'Mountain Climber'],
+  Other: [],
+}
 const MEASURE_TYPES = ['Chest', 'Shoulders', 'Back', 'Biceps', 'Forearms', 'Waist', 'Hips', 'Thighs', 'Calves', 'Neck']
 const SKIP_REASONS = ['Sick', 'Too busy', 'Low motivation', 'Sore / recovering', 'Travel', 'Other']
 
@@ -237,17 +250,28 @@ function HomeScreen({ state, goTo }) {
 
 function AddExerciseForm({ defaultRest, onAdd, onCancel }) {
   const [name, setName] = useState('')
-  const [group, setGroup] = useState('Other')
+  const [group, setGroup] = useState('Chest')
   const [low, setLow] = useState(8)
   const [high, setHigh] = useState(12)
   const [rest, setRest] = useState(defaultRest || 90)
+  const libraryOptions = EXERCISE_LIBRARY[group] || []
 
   return (
     <Card className="space-y-3">
-      <TextField autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Exercise name" />
       <select value={group} onChange={(e) => setGroup(e.target.value)} className="w-full bg-ink border border-white/10 rounded-xl px-3 py-3 text-[14px] outline-none focus:border-signal">
         {MUSCLE_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
       </select>
+
+      {libraryOptions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {libraryOptions.map((ex) => (
+            <Chip key={ex} active={name === ex} onClick={() => setName(ex)}>{ex}</Chip>
+          ))}
+        </div>
+      )}
+
+      <TextField value={name} onChange={(e) => setName(e.target.value)} placeholder={libraryOptions.length > 0 ? "Or type a custom name" : "Exercise name"} />
+
       <div className="grid grid-cols-3 gap-2.5">
         <label className="text-[11px] text-slate">Rep low
           <input type="number" value={low} onChange={(e) => setLow(+e.target.value)} className="mt-1 w-full bg-ink border border-white/10 rounded-xl px-2.5 py-2.5 text-[14px] outline-none focus:border-signal" /></label>
