@@ -283,6 +283,7 @@ function ExerciseLogCard({ exercise, state, setState }) {
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
   const [prBanner, setPrBanner] = useState(null)
+  const [editingIndex, setEditingIndex] = useState(null) // null = logging a new set; number = editing that set's index in today's log
   const [restPhase, setRestPhase] = useState('idle') // idle | prompt | running — ONE control, ONE place
   const [restTarget, setRestTarget] = useState(exercise.restSeconds)
   const [restRemaining, setRestRemaining] = useState(exercise.restSeconds)
@@ -332,6 +333,22 @@ function ExerciseLogCard({ exercise, state, setState }) {
     const w = parseFloat(weight)
     const r = parseInt(reps, 10)
     if (!w || !r) return
+
+    // Editing an existing set — just correct it in place. No PR check, no rest
+    // timer, since this isn't a new set being performed, just a typo fix.
+    if (editingIndex !== null) {
+      setState((s) => ({
+        ...s,
+        workoutLogs: s.workoutLogs.map((l) => {
+          if (l.exerciseId !== exercise.id || l.date !== todayStr) return l
+          return { ...l, sets: l.sets.map((set, i) => (i === editingIndex ? { weight: w, reps: r } : set)) }
+        }),
+      }))
+      setEditingIndex(null)
+      setWeight(''); setReps('')
+      return
+    }
+
     const repPr = r > bestRepsAtWeight(w)
     const weightPr = w > prevBest
 
@@ -362,6 +379,26 @@ function ExerciseLogCard({ exercise, state, setState }) {
     // one single inline rest control opens here — nothing floats, nothing duplicates
     setRestTarget(exercise.restSeconds)
     setRestPhase('prompt')
+  }
+
+  const editSet = (i) => {
+    const set = todaysLog.sets[i]
+    setWeight(String(set.weight))
+    setReps(String(set.reps))
+    setEditingIndex(i)
+  }
+  const cancelEdit = () => { setEditingIndex(null); setWeight(''); setReps('') }
+  const removeSet = (i) => {
+    setState((s) => ({
+      ...s,
+      workoutLogs: s.workoutLogs
+        .map((l) => {
+          if (l.exerciseId !== exercise.id || l.date !== todayStr) return l
+          return { ...l, sets: l.sets.filter((_, idx) => idx !== i) }
+        })
+        .filter((l) => !(l.exerciseId === exercise.id && l.date === todayStr && l.sets.length === 0)),
+    }))
+    if (editingIndex === i) cancelEdit()
   }
 
   return (
@@ -419,9 +456,29 @@ function ExerciseLogCard({ exercise, state, setState }) {
       {todaysLog && todaysLog.sets.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {todaysLog.sets.map((s, i) => (
-            <span key={i} className="tabular-nums rounded-full bg-moss/20 text-moss text-[12px] px-2.5 py-1 font-medium">{s.weight}kg × {s.reps}</span>
+            <span key={i} className={`flex items-center gap-1.5 tabular-nums rounded-full text-[12px] pl-2.5 pr-1.5 py-1 font-medium border ${
+              editingIndex === i ? 'bg-signal/20 text-signal border-signal/50' : 'bg-moss/20 text-moss border-transparent'
+            }`}>
+              <button onClick={() => editSet(i)} title="Tap to edit" className="tabular-nums">
+                {s.weight}kg × {s.reps}
+              </button>
+              <button
+                onClick={() => removeSet(i)}
+                className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 ${editingIndex === i ? 'bg-signal/30 text-signal hover:bg-signal/50' : 'bg-moss/30 text-moss hover:bg-moss/50'}`}
+                title="Delete this set"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="w-2.5 h-2.5"><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
+            </span>
           ))}
         </div>
+      )}
+
+      {editingIndex !== null && (
+        <p className="text-[12px] text-signal font-medium flex items-center justify-between">
+          Editing set {editingIndex + 1} — fix the numbers below and hit Save
+          <button onClick={cancelEdit} className="text-slate underline text-[12px]">Cancel</button>
+        </p>
       )}
 
       <div className="flex gap-2">
@@ -429,7 +486,7 @@ function ExerciseLogCard({ exercise, state, setState }) {
           className="flex-1 min-w-0 bg-ink border border-white/10 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-signal tabular-nums" />
         <input value={reps} onChange={(e) => setReps(e.target.value)} type="number" inputMode="numeric" placeholder="reps"
           className="flex-1 min-w-0 bg-ink border border-white/10 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-signal tabular-nums" />
-        <button onClick={logSet} className={`${btnPrimary} rounded-xl px-4 text-[14px] shrink-0`}>Log</button>
+        <button onClick={logSet} className={`${btnPrimary} rounded-xl px-4 text-[14px] shrink-0`}>{editingIndex !== null ? 'Save' : 'Log'}</button>
       </div>
     </Card>
   )
