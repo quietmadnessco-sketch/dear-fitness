@@ -546,6 +546,7 @@ function ProgressScreen({ state }) {
   const [group, setGroup] = useState('All')
   const filtered = group === 'All' ? state.exercises : state.exercises.filter((e) => e.muscleGroup === group)
   const [selected, setSelected] = useState(filtered[0]?.id || null)
+  const [panel, setPanel] = useState(null) // null | 'pr' | 'history'
 
   useEffect(() => {
     if (!filtered.some((e) => e.id === selected)) setSelected(filtered[0]?.id || null)
@@ -565,6 +566,55 @@ function ProgressScreen({ state }) {
     const top = Math.max(...l.sets.map((s) => s.weight))
     if (top > runningBest) { prEvents.push({ date: l.date, weight: top }); runningBest = top }
   })
+
+  // Sub-panels — PR timeline and full history collapsed behind entry points,
+  // same pattern as Body/Measurements, so the main Progress view stays short.
+  if (panel === 'pr' && exercise) {
+    return (
+      <div className="pb-4">
+        <div className="px-5 pt-6 pb-4 flex items-center gap-3">
+          <button onClick={() => setPanel(null)} className="p-1 -ml-1">{Icon.back('w-5 h-5')}</button>
+          <h1 className="font-display text-[19px] font-semibold">PR timeline — {exercise.name}</h1>
+        </div>
+        <div className="px-5">
+          <Card>
+            {prEvents.length === 0 ? <p className="text-[13px] text-slate">No PRs yet for this exercise.</p> : (
+              <div className="max-h-[70vh] overflow-y-auto space-y-2.5">
+                {[...prEvents].reverse().map((p, i) => (
+                  <div key={i} className="flex justify-between text-[14px] border-b border-white/5 pb-2.5">
+                    <span className="text-signal font-semibold">🔥 {p.weight}kg</span>
+                    <span className="text-slate">{p.date}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+    )
+  }
+  if (panel === 'history' && exercise) {
+    return (
+      <div className="pb-4">
+        <div className="px-5 pt-6 pb-4 flex items-center gap-3">
+          <button onClick={() => setPanel(null)} className="p-1 -ml-1">{Icon.back('w-5 h-5')}</button>
+          <h1 className="font-display text-[19px] font-semibold">Full history — {exercise.name}</h1>
+        </div>
+        <div className="px-5">
+          <Card>
+            <div className="max-h-[70vh] overflow-y-auto space-y-2.5">
+              {[...logsAsc].reverse().map((l) => (
+                <div key={l.id} className="flex justify-between border-b border-white/5 pb-2.5">
+                  <span className="text-[14px]">{l.sets.map((s) => `${s.weight}×${s.reps}`).join('  ·  ')}</span>
+                  <span className="text-[12px] text-slate shrink-0 ml-2">{l.date}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="pb-4">
@@ -605,31 +655,23 @@ function ProgressScreen({ state }) {
                   </Card>
                 )}
 
-                <Card>
-                  <p className="text-[11px] uppercase tracking-wide text-slate mb-2 font-medium">PR timeline — {exercise.name}</p>
-                  {prEvents.length === 0 ? <p className="text-[13px] text-slate">No PRs yet for this exercise.</p> : (
-                    <div className="space-y-2">
-                      {[...prEvents].reverse().map((p, i) => (
-                        <div key={i} className="flex justify-between text-[13px]">
-                          <span className="text-signal font-semibold">🔥 {p.weight}kg</span>
-                          <span className="text-slate">{p.date}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Card>
-
-                <Card>
-                  <p className="text-[11px] uppercase tracking-wide text-slate mb-2 font-medium">Full history</p>
-                  <div className="max-h-72 overflow-y-auto space-y-2.5">
-                    {[...logsAsc].reverse().map((l) => (
-                      <div key={l.id} className="flex justify-between border-b border-white/5 pb-2.5">
-                        <span className="text-[13px]">{l.sets.map((s) => `${s.weight}×${s.reps}`).join('  ·  ')}</span>
-                        <span className="text-[11px] text-slate shrink-0 ml-2">{l.date}</span>
-                      </div>
-                    ))}
+                <button onClick={() => setPanel('pr')} className="w-full flex items-center gap-3.5 rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 text-left">
+                  <div className="w-10 h-10 rounded-xl bg-ink flex items-center justify-center shrink-0">{Icon.flag('w-5 h-5 text-signal')}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-medium">PR timeline</p>
+                    <p className="text-[12px] text-slate">{prEvents.length > 0 ? `${prEvents.length} PR${prEvents.length > 1 ? 's' : ''} — best ${bestWeight}kg` : 'No PRs yet'}</p>
                   </div>
-                </Card>
+                  {Icon.chevron('w-4 h-4 text-slate shrink-0')}
+                </button>
+
+                <button onClick={() => setPanel('history')} className="w-full flex items-center gap-3.5 rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 text-left">
+                  <div className="w-10 h-10 rounded-xl bg-ink flex items-center justify-center shrink-0">{Icon.chart('w-5 h-5 text-signal')}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-medium">Full history</p>
+                    <p className="text-[12px] text-slate">{logsAsc.length} session{logsAsc.length > 1 ? 's' : ''} logged</p>
+                  </div>
+                  {Icon.chevron('w-4 h-4 text-slate shrink-0')}
+                </button>
               </>
             )}
           </>
