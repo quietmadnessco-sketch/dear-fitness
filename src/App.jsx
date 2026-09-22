@@ -716,7 +716,7 @@ function MeasurementsPanel({ state, setState, onBack }) {
   const [mType, setMType] = useState(MEASURE_TYPES[0])
   const [mValue, setMValue] = useState('')
   const [filterType, setFilterType] = useState('All')
-  const [showHistory, setShowHistory] = useState(false)
+  const [panel, setPanel] = useState(null) // null | 'history' | 'current'
 
   const setMeasurementUnit = (u) => setState((s) => ({ ...s, settings: { ...s.settings, measurementUnit: u } }))
 
@@ -740,11 +740,11 @@ function MeasurementsPanel({ state, setState, onBack }) {
     return { type: t, latest: latestM, change }
   }).filter((r) => r.latest)
 
-  if (showHistory) {
+  if (panel === 'history') {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => setShowHistory(false)} className="p-1 -ml-1">{Icon.back('w-5 h-5')}</button>
+          <button onClick={() => setPanel(null)} className="p-1 -ml-1">{Icon.back('w-5 h-5')}</button>
           <p className="font-display text-[17px] font-semibold flex-1">Measurement history</p>
           <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="bg-ink border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-signal">
             <option value="All">All types</option>
@@ -763,6 +763,28 @@ function MeasurementsPanel({ state, setState, onBack }) {
               </div>
             ))}
           </div>
+        </Card>
+      </div>
+    )
+  }
+
+  if (panel === 'current') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setPanel(null)} className="p-1 -ml-1">{Icon.back('w-5 h-5')}</button>
+          <p className="font-display text-[17px] font-semibold flex-1">Current &amp; change</p>
+        </div>
+        <Card>
+          {latestByType.length === 0 ? <p className="text-[13px] text-slate">No entries yet.</p> : latestByType.map((r) => (
+            <div key={r.type} className="flex justify-between border-b border-white/5 py-2.5">
+              <span className="text-[14px]">{r.type}</span>
+              <span className="tabular-nums text-[14px]">
+                {fmtL(r.latest.valueCm, measurementUnit)}{measurementUnit}{' '}
+                {r.change !== null && <span className={`text-[12px] ml-1 ${r.change < 0 ? 'text-moss' : r.change > 0 ? 'text-signal' : 'text-slate'}`}>({r.change > 0 ? '+' : ''}{fmtL(Math.abs(r.change), measurementUnit)})</span>}
+              </span>
+            </div>
+          ))}
         </Card>
       </div>
     )
@@ -790,21 +812,17 @@ function MeasurementsPanel({ state, setState, onBack }) {
       </Card>
 
       {latestByType.length > 0 && (
-        <Card>
-          <p className="text-[11px] uppercase tracking-wide text-slate mb-2 font-medium">Current &amp; change</p>
-          {latestByType.map((r) => (
-            <div key={r.type} className="flex justify-between border-b border-white/5 py-1.5">
-              <span className="text-[13px]">{r.type}</span>
-              <span className="tabular-nums text-[13px]">
-                {fmtL(r.latest.valueCm, measurementUnit)}{measurementUnit}{' '}
-                {r.change !== null && <span className={`text-[11px] ml-1 ${r.change < 0 ? 'text-moss' : r.change > 0 ? 'text-signal' : 'text-slate'}`}>({r.change > 0 ? '+' : ''}{fmtL(Math.abs(r.change), measurementUnit)})</span>}
-              </span>
-            </div>
-          ))}
-        </Card>
+        <button onClick={() => setPanel('current')} className="w-full flex items-center gap-3.5 rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 text-left">
+          <div className="w-10 h-10 rounded-xl bg-ink flex items-center justify-center shrink-0">{Icon.scale('w-5 h-5 text-signal')}</div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[14px] font-medium">Current &amp; change</p>
+            <p className="text-[12px] text-slate">{latestByType.length} type{latestByType.length > 1 ? 's' : ''} tracked</p>
+          </div>
+          {Icon.chevron('w-4 h-4 text-slate shrink-0')}
+        </button>
       )}
 
-      <button onClick={() => setShowHistory(true)} className="w-full flex items-center gap-3.5 rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 text-left">
+      <button onClick={() => setPanel('history')} className="w-full flex items-center gap-3.5 rounded-2xl bg-gradient-to-b from-inkraise to-[#171F2A] border border-white/[0.07] shadow-lg shadow-black/20 p-4 text-left">
         <div className="w-10 h-10 rounded-xl bg-ink flex items-center justify-center shrink-0">{Icon.chart('w-5 h-5 text-signal')}</div>
         <div className="flex-1 min-w-0">
           <p className="text-[14px] font-medium">History</p>
