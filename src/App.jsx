@@ -27,12 +27,15 @@ const MEASURE_TYPES = ['Chest', 'Shoulders', 'Back', 'Biceps', 'Forearms', 'Wais
 const SKIP_REASONS = ['Sick', 'Too busy', 'Low motivation', 'Sore / recovering', 'Travel', 'Other']
 
 const DEFAULT_STATE = {
-  exercises: [], // { id, name, day, muscleGroup, repRangeLow, repRangeHigh, restSeconds }
+  exercises: [], // { id, name, muscleGroup, repRangeLow, repRangeHigh, restSeconds } — your exercise library
   workoutLogs: [], // { id, exerciseId, date, sets: [{weight, reps}] }
   bodyLogs: [], // { id, date, time, weightKg } — every entry kept, never overwritten
   measurementLogs: [], // { id, date, time, type, valueCm } — every entry kept
   skipLogs: [], // { id, date, reason, note } — one per calendar day
   streak: { current: 0, longest: 0, lastWorkoutDate: null },
+  // Which exercises from the library are picked for *today's* session — chosen
+  // fresh each day so old exercises/logs don't clutter the Workout screen.
+  todaysSelection: { date: null, exerciseIds: [] },
   settings: {
     weeklyGoal: 5,
     plateauDays: 60,
@@ -526,35 +529,115 @@ function ExerciseLogCard({ exercise, state, setState }) {
   )
 }
 
-function WorkoutScreen({ state, setState }) {
+function ExercisePicker({ state, setState, initialSelected, onStart }) {
   const [adding, setAdding] = useState(false)
+  const [picked, setPicked] = useState(new Set(initialSelected))
   const groupsPresent = ['All', ...MUSCLE_GROUPS.filter((g) => state.exercises.some((e) => e.muscleGroup === g))]
   const [group, setGroup] = useState('All')
   const list = group === 'All' ? state.exercises : state.exercises.filter((e) => e.muscleGroup === group)
 
+  const toggle = (id) => setPicked((prev) => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+
   return (
     <div className="pb-4">
-      <ScreenHeader title="Workout" subtitle="Your full routine — log any exercise, any day" />
-      {state.exercises.length > 0 && (
-        <div className="px-5 flex gap-1.5 overflow-x-auto pb-1 mb-1">
-          {groupsPresent.map((g) => <Chip key={g} active={group === g} onClick={() => setGroup(g)}>{g}</Chip>)}
+      <ScreenHeader title="What are you training?" subtitle="Pick from your routine, then start logging" />
+      <div className="px-5 space-y-3">
+        {state.exercises.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {groupsPresent.map((g) => <Chip key={g} active={group === g} onClick={() => setGroup(g)}>{g}</Chip>)}
+          </div>
+        )}
+
+        {list.length === 0 && !adding && (
+          <p className="text-[14px] text-slate py-2">
+            {state.exercises.length === 0 ? 'No exercises in your library yet — add one below.' : 'Nothing in this group yet.'}
+          </p>
+        )}
+
+        <div className="space-y-2">
+          {list.map((ex) => {
+            const isPicked = picked.has(ex.id)
+            return (
+              <button
+                key={ex.id}
+                onClick={() => toggle(ex.id)}
+                className={`w-full flex items-center gap-3 rounded-2xl border p-3.5 text-left transition-colors ${
+                  isPicked ? 'bg-signal/10 border-signal/50' : 'bg-inkraise border-white/[0.07]'
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${isPicked ? 'bg-signal border-signal' : 'border-white/20'}`}>
+                  {isPicked && <svg viewBox="0 0 24 24" fill="none" stroke="#131B26" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M20 6 9 17l-5-5" /></svg>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-medium">{ex.name}</p>
+                  <p className="text-[11px] text-slate">{ex.muscleGroup} · {ex.repRangeLow}–{ex.repRangeHigh} reps</p>
+                </div>
+              </button>
+            )
+          })}
         </div>
-      )}
-      <div className="px-5 space-y-3 mt-3">
-        {list.map((ex) => <ExerciseLogCard key={ex.id} exercise={ex} state={state} setState={setState} />)}
-        {list.length === 0 && !adding && state.exercises.length > 0 && <p className="text-[14px] text-slate py-2">No exercises in this group yet.</p>}
-        {list.length === 0 && !adding && state.exercises.length === 0 && <p className="text-[14px] text-slate py-2">No exercises yet — add your routine below.</p>}
+
         {adding ? (
           <AddExerciseForm
             defaultRest={state.settings.defaultRestSeconds}
             onCancel={() => setAdding(false)}
-            onAdd={(ex) => { setState((s) => ({ ...s, exercises: [...s.exercises, ex] })); setAdding(false) }}
+            onAdd={(ex) => {
+              setState((s) => ({ ...s, exercises: [...s.exercises, ex] }))
+              setPicked((prev) => new Set(prev).add(ex.id)) // auto-pick a freshly added exercise
+              setAdding(false)
+            }}
           />
         ) : (
           <button onClick={() => setAdding(true)} className="w-full flex items-center justify-center gap-1.5 rounded-2xl border border-dashed border-white/20 text-slate py-3.5 text-[14px] font-medium">
-            {Icon.plus('w-4 h-4')} Add exercise
+            {Icon.plus('w-4 h-4')} Add new exercise to library
           </button>
         )}
+
+        <button
+          disabled={picked.size === 0}
+          onClick={() => onStart([...picked])}
+          className={`${btnPrimary} w-full rounded-2xl py-4 text-[15px] disabled:opacity-40`}
+        >
+          {picked.size === 0 ? 'Select at least one exercise' : `Start session — ${picked.size} exercise${picked.size > 1 ? 's' : ''}`}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function WorkoutScreen({ state, setState }) {
+  const todayStr = new Date().toDateString()
+  const selection = state.todaysSelection.date === todayStr ? state.todaysSelection.exerciseIds : []
+  const [picking, setPicking] = useState(selection.length === 0)
+
+  const startSession = (ids) => {
+    setState((s) => ({ ...s, todaysSelection: { date: todayStr, exerciseIds: ids } }))
+    setPicking(false)
+  }
+
+  if (picking || selection.length === 0) {
+    return <ExercisePicker state={state} setState={setState} initialSelected={selection} onStart={startSession} />
+  }
+
+  const todaysExercises = selection.map((id) => state.exercises.find((e) => e.id === id)).filter(Boolean)
+
+  return (
+    <div className="pb-4">
+      <div className="px-5 pt-6 pb-4 flex items-start justify-between">
+        <div>
+          <h1 className="font-display text-[22px] font-bold tracking-tight">Today's session</h1>
+          <p className="text-[13px] text-slate mt-0.5">{todaysExercises.length} exercise{todaysExercises.length > 1 ? 's' : ''} — log below</p>
+        </div>
+        <button onClick={() => setPicking(true)} className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-[12px] text-slate shrink-0">
+          Edit
+        </button>
+      </div>
+      <div className="px-5 space-y-3">
+        {todaysExercises.map((ex) => <ExerciseLogCard key={ex.id} exercise={ex} state={state} setState={setState} />)}
       </div>
     </div>
   )
